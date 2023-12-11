@@ -18,20 +18,24 @@ class Element():
             ET.SubElement(Element,key).text = edict[key]
 
 def Classify(cell):
-    count = cell.count("L1_") + cell.count("LY_") + cell.count("ALM") + cell.count("L3_")
+    count = cell.count("L1_") + cell.count("LY_") + cell.count("ALM") + cell.count("L3_")+ cell.count("H1_")+ cell.count("W1_")
     comma = cell.count(",")
     ElementType,ElementName,TagName,Expression,DeviceNum,IsShowTagUnit,DecimalDigits,LoLimit,HiLimit,TagUnit,TextAlign = "","",[],"","","false","2","","","","Center"
     match count:
         case 0:
-            ElementType = "SingleLabel"
-            ElementName = "无边框文字"
+            if comma ==2:
+                ElementType = "Jump"
+                ElementName = "跳转"
+            else:
+                ElementType = "SingleLabel"
+                ElementName = "无边框文字"
         case _:
             ElementType = "Statistics"
             ElementName = "统计"
-            TagName = re.findall("L1_[\w\.]+|LY_[\w\.]+|L3_[\w\.]+|ALM-[\w\.]+", cell)
+            TagName = re.findall("W1_[\w\.]+|L1_[\w\.]+|LY_[\w\.]+|L3_[\w\.]+|ALM-[\w\.]+|H1_[\w\.]+", cell)
             DeviceNum = cell.split(',')[0]
             Expression = cell.split(',')[1]
-            if comma == 1:  # 有逗号，格式为要显示设备名、公式（单Tag也作为公式）、是否显示单位、小数点位数、低限报警、高限报警
+            if comma == 1:  # 有逗号，格式为要显示设备名、公式（单Tag也作为公式）、是否显示单位、小数点位数、低限报警、高限报警，文本对齐
                 if DeviceNum != "":
                     ElementType = "DynamicWord"
                     ElementName = "动态文本"
@@ -159,23 +163,30 @@ def ParseXls(df,title):
             Width = twidth - 2*mx
             Height = 30 #36 - 2*my
             edict = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width), "Height": str(Height),"Zindex": str(Zindex), "Alpha": "1", "FlowchartID": "3874184148011472", "Rotation": "0","TagValueScancycle": "5"}
+            Zindex += 1
             if ElementType == 'SingleLabel':
-                Zindex += 1
-                edict["OtherAttrs"] = '{"FontFamily": "微软雅黑", "ShowText":"' + cell + '", "FontSize": 18, "TextAlign": "Left","FontColor": 0, "FontWeight": false, "orinalId": 3781463406005784,"VerticalAlign":"middle"}'
-                Element(Elements, edict)
+                if ',' in cell:
+                    ShowText = cell.split(',')[0]
+                else:
+                    TextAlign = "Left"
+                    ShowText = cell
+                edict["OtherAttrs"] = '{"FontFamily": "微软雅黑", "ShowText":"' + ShowText + '", "FontSize": 18, "TextAlign": "'+TextAlign+'","FontColor": 0, "FontWeight": false, "orinalId": 3781463406005784,"VerticalAlign":"middle"}'
+                # Element(Elements, edict)
+                # 处理同一画面第二个表的表头
                 if index == 0 and ntable == 2:
-                    Zindex += 1
                     X = left[1] + icol*twidth + mx
                     edict = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width),"Height": str(Height), "Zindex": str(Zindex), "Alpha": "1", "FlowchartID": "3874184148011472", "Rotation": "0", "TagValueScancycle": "5"}
                     edict["OtherAttrs"] = '{"FontFamily": "微软雅黑", "ShowText":"' + cell + '", "FontSize": 18, "TextAlign": "Left","FontColor": 0, "FontWeight": false, "orinalId": 3781463406005784,"VerticalAlign":"middle"}'
                     Element(Elements, edict)
+            elif ElementType == 'Jump':
+                ShowText = cell.split(',')[0]
+                FlowchartNumber = cell.split(',')[2]
+                edict["OtherAttrs"] = '{"ShowText": "'+ShowText+'", "WindowWidth": 800, "RoateIsUse": false, "RoateSpeed": 3000,"FlowchartNumber": "'+FlowchartNumber+'", "MutliStatus": [], "JumpType": "Jump", "IsShowBgPic": false,"FontWeight": false, "Direction": "0", "IsShowDefualtTooltipText": true, "PageURL": "","IsBack": false, "IsRepeat": false, "TextAlign": "Left", "RoateIsRepeat": false,"IsShowAnimation": false, "Distance": "300", "BgPicPath": "", "FontFamily": "微软雅黑", "Speed": 1000,"FontColor": "#000000", "WindowHeight": 600, "FontSize": "18", "VTextAlign": "Center","RoateDirection": 0}'
             else:
-                print(f"TextAlign:{TextAlign}")
                 if DeviceNum == '':
                     Zindex += 1
                     edict["OtherAttrs"] = '{"FlickFrequency": 2, "IsSettledBGWidth": false, "IsUseGlabolStyle": false, "LoLoLimit": "","LoStyle": {"FontFamily": "微软雅黑", "FillColor": "#6699cc", "FontSize": "18","TextAlign": "'+TextAlign+'", "FontColor": "#ff0000", "BorderColor": "#000000","Alpha": "100%", "IsBold": "false", "IsShowBorder": "false", "BorderWidth": "1","IsShowBG": "true"}, "IsAchieveLoLimit": true, "IsAlarm": true, "IsshowTagUnit": '+IsShowTagUnit+',"AlarmConditionType": "Number", "IsFlick": true, "IsAchieveHiLimit": false, "HiLimit": "'+HiLimit+'","IsAchieveHiHiLimit": true,"NormalStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":6724044,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","IsUsePreforeAndLast": true, "IsUseGlobalTagValueScancycle": true, "IsShowTooltip": true,"HiHiStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":65535,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","ValueExceptionShow": "NaN","HiStyle": {"FontFamily": "微软雅黑", "FillColor": "#6699cc", "FontSize": "18","TextAlign": "'+TextAlign+'", "FontColor": "#ff0000", "BorderColor": "#000000","Alpha": "100%", "IsBold": "false", "IsShowBorder": "false", "BorderWidth": "1","IsShowBG": "true"}, "IsUseGlabolDatasource": true, "IsShowEffectiveDigit": false,"IsUseGlobalDecimalDigits": false, "HiHiLimit": "","LoLoStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":65535,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","Expression": "' + Expression + '", "IsFilterExceptionValue": false, "IsAchieveLoLoLimit": true,"LoLimit": "'+LoLimit+'", "DecimalDigits": "'+DecimalDigits+'", "TagUnit": "'+TagUnit+'","TooltipFormat": "名称值时间质量码描述上上限上限下限下下限"}'
                     edict["TagName"] = ','.join(TagName)
-                    Element(Elements, edict)
                 else:
                     Zindex += 1
                     X = X - 2
@@ -186,7 +197,7 @@ def ParseXls(df,title):
                              "FlowchartID": "3874184148011472", "Rotation": "0", "TagValueScancycle": "5"}
                     edict["OtherAttrs"] = '{"RoateIsUse":false,"RoateSpeed":3000,"MutliStatus":[],"Direction":"0","IsBack":false,"IsRepeat":false,"Status1Text":"'+DeviceNum+'","Status1Style":{"FontFamily":"微软雅黑","FillColor":"#00ff00","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#999999","Alpha":"100%","IsBold":"false","IsShowBorder":"true","BorderWidth":"1","IsShowBG":"true"},"IsUsePreforeAndLast":true,"RoateIsRepeat":false,"IsUseGlobalTagValueScancycle":true,"IsShowTooltip":true,"IsShowAnimation":false,"Distance":"300","Speed":1000,"StatusValue1":"1","StatusValue2":"0","StatusValue3":"-1","Status3Style":{"FontFamily":"微软雅黑","FillColor":"#00ff00","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"true"},"IsUseGlabolDatasource":true,"Status2Text":"'+DeviceNum+'","Status2Style":{"FontFamily":"微软雅黑","FillColor":"#f0ebf0","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"false"},"ExceptionStyle":{"FontFamily":"微软雅黑","FillColor":"#f0ebf0","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"false"},"ExceptionText":"'+DeviceNum+'","TooltipFormat":"","RoateDirection":0,"Status3Text":"'+DeviceNum+'"}'
                     edict["TagName"] = TagName[0]
-                    Element(Elements, edict)
+            Element(Elements, edict)
 
     tree.write(title + ".xml", encoding="utf-8")
 
