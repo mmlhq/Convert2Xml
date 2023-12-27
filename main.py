@@ -18,37 +18,54 @@ class Element():
             ET.SubElement(Element,key).text = edict[key]
 
 def Classify(cell):
-    count = cell.count("L1_") + cell.count("LY_") + cell.count("ALM") + cell.count("L3_")+ cell.count("H1_")+ cell.count("W1_")
+    count = 0
+    count_cz = cell.count("L1_LXCZ2_L1_LXCZ2")
+    if count_cz > 0:
+        count = count_cz + cell.count("LY_") + cell.count("ALM") + cell.count("L3_")+ cell.count("H1_KF")+ cell.count("W1_")
+    else:
+        count = cell.count("L1_") + cell.count("LY_") + cell.count("ALM") + cell.count("L3_")+ cell.count("H1_KF")+ cell.count("W1_")
     comma = cell.count(",")
     ElementType,ElementName,TagName,Expression,DeviceNum,IsShowTagUnit,DecimalDigits,LoLimit,HiLimit,TagUnit,TextAlign = "","",[],"","","false","2","","","","Center"
+    TagName = re.findall("W1_[\w\.]+|L1_[\w\.]+|LY_[\w\.]+|L3_[\w\.]+|ALM-[\w\.]+|H1_KF[\w\.]+", cell)
+
+    if comma > 2:
+        IsShowTagUnit = cell.split(',')[2]
+        DecimalDigits = "2" if cell.split(',')[3] == "" else str(cell.split(',')[3])
+        LoLimit = cell.split(',')[4]
+        HiLimit = cell.split(',')[5]
+        TagUnit = cell.split(',')[6]
+        TextAlign = cell.split(',')[7]
+
     match count:
         case 0:
-            if comma ==2:
+            ElementType = "SingleLabel"
+            ElementName = "无边框文字"
+            if comma == 2:
                 ElementType = "Jump"
                 ElementName = "跳转"
-            else:
-                ElementType = "SingleLabel"
-                ElementName = "无边框文字"
-        case _:
-            ElementType = "Statistics"
-            ElementName = "统计"
-            TagName = re.findall("W1_[\w\.]+|L1_[\w\.]+|LY_[\w\.]+|L3_[\w\.]+|ALM-[\w\.]+|H1_[\w\.]+", cell)
-            DeviceNum = cell.split(',')[0]
-            Expression = cell.split(',')[1]
-            if comma == 1:  # 有逗号，格式为要显示设备名、公式（单Tag也作为公式）、是否显示单位、小数点位数、低限报警、高限报警，文本对齐
+        case 1:
+            ElementType = "DynamicTag"
+            ElementName = "动态位号"
+            if comma == 1:  # 有逗号，格式为要显示设备名、公式
+                DeviceNum = cell.split(',')[0]
+                Expression = cell.split(',')[1]
                 if DeviceNum != "":
                     ElementType = "DynamicWord"
                     ElementName = "动态文本"
-            else:
-                IsShowTagUnit = cell.split(',')[2]
-                DecimalDigits = "2" if cell.split(',')[3] == "" else str(cell.split(',')[3])
-                LoLimit = cell.split(',')[4]
-                HiLimit= cell.split(',')[5]
-                TagUnit = cell.split(',')[6]
-                TextAlign = cell.split(',')[7]
+            elif comma == 2:
+                ElementType = "Jump"
+                ElementName = "跳转"
+        case _:
+            ElementType = "Statistics"
+            ElementName = "统计"
+            DeviceNum = cell.split(',')[0]
+            Expression = cell.split(',')[1]
 
-            for i in range(len(TagName)):
-                Expression = Expression.replace(TagName[i], "Tag" + str(i + 1))
+            print(cell)
+            print(count)
+
+    for i in range(len(TagName)):
+        Expression = Expression.replace(TagName[i], "Tag" + str(i + 1))
             # print(f"cell：{cell},Expression:{Expression},DeviceNum:{DeviceNum},IsShowTagUnit:{IsShowTagUnit},DecimalDigits:{DecimalDigits},LoLimit:{LoLimit},HiLimit:{HiLimit}")
     return ElementType,ElementName,TagName,Expression,DeviceNum,IsShowTagUnit,DecimalDigits,LoLimit,HiLimit,TagUnit,TextAlign
 
@@ -75,8 +92,8 @@ def AssembleTable(row,column):
 def Tableinfo(df):
     nrow,ncol = df.shape[0],df.shape[1]
     left,width,ntable = [],0,0
-
     if nrow <= 27:
+
         ntable = 1
         match ncol:
             case 5:
@@ -110,6 +127,7 @@ def Tableinfo(df):
     left.append((1920 - width * ncol * ntable) / (ntable+1))
     left.append(2 * left[0] + width * ncol)
     cells = AssembleTable(nrow,ncol)
+    print(f"width:{width},ncol:{ncol},表数：{ntable}，left:{left}")
     return (ntable,left, width,ncol,cells)
 
 def ParseXls(df,title):
@@ -163,7 +181,7 @@ def ParseXls(df,title):
             Width = twidth - 2*mx
             Height = 30 #36 - 2*my
             edict = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width), "Height": str(Height),"Zindex": str(Zindex), "Alpha": "1", "FlowchartID": "3874184148011472", "Rotation": "0","TagValueScancycle": "5"}
-            Zindex += 1
+
             if ElementType == 'SingleLabel':
                 if ',' in cell:
                     ShowText = cell.split(',')[0]
@@ -171,32 +189,35 @@ def ParseXls(df,title):
                     TextAlign = "Left"
                     ShowText = cell
                 edict["OtherAttrs"] = '{"FontFamily": "微软雅黑", "ShowText":"' + ShowText + '", "FontSize": 18, "TextAlign": "'+TextAlign+'","FontColor": 0, "FontWeight": false, "orinalId": 3781463406005784,"VerticalAlign":"middle"}'
-                # Element(Elements, edict)
-                # 处理同一画面第二个表的表头
+
+                # 如果是第一行，且有两个表，多加第二个表的表头
                 if index == 0 and ntable == 2:
+                    Zindex += 1
                     X = left[1] + icol*twidth + mx
-                    edict = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width),"Height": str(Height), "Zindex": str(Zindex), "Alpha": "1", "FlowchartID": "3874184148011472", "Rotation": "0", "TagValueScancycle": "5"}
-                    edict["OtherAttrs"] = '{"FontFamily": "微软雅黑", "ShowText":"' + cell + '", "FontSize": 18, "TextAlign": "Left","FontColor": 0, "FontWeight": false, "orinalId": 3781463406005784,"VerticalAlign":"middle"}'
-                    Element(Elements, edict)
+                    edict2 = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width),"Height": str(Height), "Zindex": str(Zindex), "Alpha": "1", "FlowchartID": "3874184148011472", "Rotation": "0", "TagValueScancycle": "5"}
+                    edict2["OtherAttrs"] = '{"FontFamily": "微软雅黑", "ShowText":"' + cell + '", "FontSize": 18, "TextAlign": "Left","FontColor": 0, "FontWeight": false, "orinalId": 3781463406005784,"VerticalAlign":"middle"}'
+                    Element(Elements, edict2)
             elif ElementType == 'Jump':
                 ShowText = cell.split(',')[0]
                 FlowchartNumber = cell.split(',')[2]
                 edict["OtherAttrs"] = '{"ShowText": "'+ShowText+'", "WindowWidth": 800, "RoateIsUse": false, "RoateSpeed": 3000,"FlowchartNumber": "'+FlowchartNumber+'", "MutliStatus": [], "JumpType": "Jump", "IsShowBgPic": false,"FontWeight": false, "Direction": "0", "IsShowDefualtTooltipText": true, "PageURL": "","IsBack": false, "IsRepeat": false, "TextAlign": "Left", "RoateIsRepeat": false,"IsShowAnimation": false, "Distance": "300", "BgPicPath": "", "FontFamily": "微软雅黑", "Speed": 1000,"FontColor": "#000000", "WindowHeight": 600, "FontSize": "18", "VTextAlign": "Center","RoateDirection": 0}'
+            elif ElementType == "DynamicWord":
+                X = X - 2
+                Y = Y - 1
+                Height = Height - 2
+                edict = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width),
+                         "Height": str(Height), "Zindex": str(Zindex), "Alpha": "1",
+                         "FlowchartID": "3874184148011472", "Rotation": "0", "TagValueScancycle": "5"}
+                edict["OtherAttrs"] = '{"RoateIsUse":false,"RoateSpeed":3000,"MutliStatus":[],"Direction":"0","IsBack":false,"IsRepeat":false,"Status1Text":"'+DeviceNum+'","Status1Style":{"FontFamily":"微软雅黑","FillColor":"#00ff00","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#999999","Alpha":"100%","IsBold":"false","IsShowBorder":"true","BorderWidth":"1","IsShowBG":"true"},"IsUsePreforeAndLast":true,"RoateIsRepeat":false,"IsUseGlobalTagValueScancycle":true,"IsShowTooltip":true,"IsShowAnimation":false,"Distance":"300","Speed":1000,"StatusValue1":"1","StatusValue2":"0","StatusValue3":"-1","Status3Style":{"FontFamily":"微软雅黑","FillColor":"#00ff00","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"true"},"IsUseGlabolDatasource":true,"Status2Text":"'+DeviceNum+'","Status2Style":{"FontFamily":"微软雅黑","FillColor":"#f0ebf0","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"false"},"ExceptionStyle":{"FontFamily":"微软雅黑","FillColor":"#f0ebf0","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"false"},"ExceptionText":"'+DeviceNum+'","TooltipFormat":"","RoateDirection":0,"Status3Text":"'+DeviceNum+'"}'
+                edict["TagName"] = TagName[0]
             else:
-                if DeviceNum == '':
-                    Zindex += 1
-                    edict["OtherAttrs"] = '{"FlickFrequency": 2, "IsSettledBGWidth": false, "IsUseGlabolStyle": false, "LoLoLimit": "","LoStyle": {"FontFamily": "微软雅黑", "FillColor": "#6699cc", "FontSize": "18","TextAlign": "'+TextAlign+'", "FontColor": "#ff0000", "BorderColor": "#000000","Alpha": "100%", "IsBold": "false", "IsShowBorder": "false", "BorderWidth": "1","IsShowBG": "true"}, "IsAchieveLoLimit": true, "IsAlarm": true, "IsshowTagUnit": '+IsShowTagUnit+',"AlarmConditionType": "Number", "IsFlick": true, "IsAchieveHiLimit": false, "HiLimit": "'+HiLimit+'","IsAchieveHiHiLimit": true,"NormalStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":6724044,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","IsUsePreforeAndLast": true, "IsUseGlobalTagValueScancycle": true, "IsShowTooltip": true,"HiHiStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":65535,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","ValueExceptionShow": "NaN","HiStyle": {"FontFamily": "微软雅黑", "FillColor": "#6699cc", "FontSize": "18","TextAlign": "'+TextAlign+'", "FontColor": "#ff0000", "BorderColor": "#000000","Alpha": "100%", "IsBold": "false", "IsShowBorder": "false", "BorderWidth": "1","IsShowBG": "true"}, "IsUseGlabolDatasource": true, "IsShowEffectiveDigit": false,"IsUseGlobalDecimalDigits": false, "HiHiLimit": "","LoLoStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":65535,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","Expression": "' + Expression + '", "IsFilterExceptionValue": false, "IsAchieveLoLoLimit": true,"LoLimit": "'+LoLimit+'", "DecimalDigits": "'+DecimalDigits+'", "TagUnit": "'+TagUnit+'","TooltipFormat": "名称值时间质量码描述上上限上限下限下下限"}'
+                if DeviceNum == '': # 动态位号或者统计组件
                     edict["TagName"] = ','.join(TagName)
-                else:
-                    Zindex += 1
-                    X = X - 2
-                    Y = Y - 1
-                    Height = Height - 2
-                    edict = {"ElementType": ElementType, "X": str(X), "Y": str(Y), "Width": str(Width),
-                             "Height": str(Height), "Zindex": str(Zindex), "Alpha": "1",
-                             "FlowchartID": "3874184148011472", "Rotation": "0", "TagValueScancycle": "5"}
-                    edict["OtherAttrs"] = '{"RoateIsUse":false,"RoateSpeed":3000,"MutliStatus":[],"Direction":"0","IsBack":false,"IsRepeat":false,"Status1Text":"'+DeviceNum+'","Status1Style":{"FontFamily":"微软雅黑","FillColor":"#00ff00","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#999999","Alpha":"100%","IsBold":"false","IsShowBorder":"true","BorderWidth":"1","IsShowBG":"true"},"IsUsePreforeAndLast":true,"RoateIsRepeat":false,"IsUseGlobalTagValueScancycle":true,"IsShowTooltip":true,"IsShowAnimation":false,"Distance":"300","Speed":1000,"StatusValue1":"1","StatusValue2":"0","StatusValue3":"-1","Status3Style":{"FontFamily":"微软雅黑","FillColor":"#00ff00","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"true"},"IsUseGlabolDatasource":true,"Status2Text":"'+DeviceNum+'","Status2Style":{"FontFamily":"微软雅黑","FillColor":"#f0ebf0","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"false"},"ExceptionStyle":{"FontFamily":"微软雅黑","FillColor":"#f0ebf0","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#505050","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"false"},"ExceptionText":"'+DeviceNum+'","TooltipFormat":"","RoateDirection":0,"Status3Text":"'+DeviceNum+'"}'
-                    edict["TagName"] = TagName[0]
+                    if ElementType == "DynamicTag":
+                        edict["OtherAttrs"] = '{"ARExpression":"Tag1&amp;gt;0","FlickFrequency":2,"IsSettledBGWidth":true,"IsUseGlabolStyle":false,"RoateIsUse":false,"IsShowTime":false,"IsshowTagName":false,"ProcessCard":"","IsAlarm":true,"IsshowTagUnit":'+IsShowTagUnit+',"IsFlick":false,"IsAchieveHiHiLimit":false,"isNumberStyle":false,"IsUsePreforeAndLast":true,"IsUseGlobalTagValueScancycle":true,"IsAlarmRestrain":false,"IsshowTagValue":true,"IsShowAnimation":false,"Distance":"300","HiHiStyle":{"FontFamily":"微软雅黑","FillColor":"#ff0000","FontSize":18,"TextAlign":"'+TextAlign+'","Alpha":"100%","BorderColor":"#6600ff","FontColor":"#000000","IsShowBorder":false,"IsBold":false,"BorderWidth":1,"IsShowBG":true},"ValueExceptionShow":"NAN","HiStyle":{"FontFamily":"微软雅黑","FillColor":"#6699cc","FontSize":18,"TextAlign":"'+TextAlign+'","Alpha":"100%","BorderColor":"#6600ff","FontColor":"#ff0000","IsShowBorder":false,"IsBold":false,"BorderWidth":1,"IsShowBG":true},"IsUseGlabolDatasource":true,"IsUseGlobalDecimalDigits":true,"showTagNamePosition":"Up","IsShowExpression":false,"HiHiLimit":"","LoLoStyle":{"FontFamily":"微软雅黑","FillColor":"#ff0000","FontSize":18,"TextAlign":"'+TextAlign+'","Alpha":"100%","BorderColor":"#6600ff","FontColor":"#000000","IsShowBorder":false,"IsBold":false,"BorderWidth":1,"IsShowBG":true},"showTimePosition":"Left","numberStyle":{"colorTag":{"showSections":[],"dataType":"true","trueColor":{"color":"#00ff00","id":"0"},"falseColor":{"color":"#ff0000","id":"0"},"tagName":""},"showTag":{"showSections":[],"dataType":"true","trueColor":{"switchValue":"true","IsShow":"true","id":"0"},"falseColor":{"color":"#ff0000","id":"0"},"tagName":""},"trunTag":{"IsBool":"true","minValue":0,"IsClockwise":"true","maxValue":100,"maxAngle":180,"dataType":"true","minAngle":0,"IsOn":"false","tagName":"","speed":0},"flashTag":{"showSections":[],"dataType":"true","trueColor":{"backColor":"#ff0000","switchValue":"true","id":"0","foreColor":"#00ff00","isFlash":"true","frequency":1},"falseColor":{"color":"#ff0000","id":"0"},"tagName":""}},"IsAchieveLoLoLimit":false,"TooltipFormat":"","RoateDirection":0,"LoLoLimit":"","RoateSpeed":3000,"LoStyle":{"FontFamily":"微软雅黑","FillColor":"#6699cc","FontSize":18,"TextAlign":"'+TextAlign+'","Alpha":"100%","BorderColor":"#6600ff","FontColor":"#ff0000","IsShowBorder":false,"IsBold":false,"BorderWidth":1,"IsShowBG":true},"IsAchieveLoLimit":false,"Direction":"0","AlarmRestrainTagName":"","AlarmConditionType":"Number","ProcessCardSmrId":"","IsBack":false,"IsAchieveHiLimit":false,"IsRepeat":false,"HiLimit":"'+HiLimit+'","alarmId":3991008028838688,"NormalStyle":{"FontFamily":"微软雅黑","FillColor":"#6699cc","FontSize":"18","TextAlign":"center","FontColor":"#000000","BorderColor":"#6600ff","Alpha":"100%","IsBold":"false","IsShowBorder":"false","BorderWidth":"1","IsShowBG":"true"},"RoateIsRepeat":false,"IsShowTooltip":true,"TagNameStyle":"","TagNameHeight":20,"Speed":1000,"IsUseGlobalValueExceptionShow":true,"ColorSections":[],"ProcessCardId":"","TagSource":"TagManage","Text":"","IsShowEffectiveDigit":false,"RegionNumber":3,"IntervalWidth":1,"Expression":"' + Expression + '","DecimalDigits":2,"LoLimit":"'+LoLimit+'","TagUnit":"'+TagUnit+'","orinalId":"e59bf4e88-3f13-7c85-bb6e-003a6bd332f0"}'
+                    else:
+                        edict["OtherAttrs"] = '{"FlickFrequency": 2, "IsSettledBGWidth": false, "IsUseGlabolStyle": false, "LoLoLimit": "","LoStyle": {"FontFamily": "微软雅黑", "FillColor": "#6699cc", "FontSize": "18","TextAlign": "'+TextAlign+'", "FontColor": "#ff0000", "BorderColor": "#000000","Alpha": "100%", "IsBold": "false", "IsShowBorder": "false", "BorderWidth": "1","IsShowBG": "true"}, "IsAchieveLoLimit": true, "IsAlarm": true, "IsshowTagUnit": '+IsShowTagUnit+',"AlarmConditionType": "Number", "IsFlick": true, "IsAchieveHiLimit": false, "HiLimit": "'+HiLimit+'","IsAchieveHiHiLimit": true,"NormalStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":6724044,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","IsUsePreforeAndLast": true, "IsUseGlobalTagValueScancycle": true, "IsShowTooltip": true,"HiHiStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":65535,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","ValueExceptionShow": "NaN","HiStyle": {"FontFamily": "微软雅黑", "FillColor": "#6699cc", "FontSize": "18","TextAlign": "'+TextAlign+'", "FontColor": "#ff0000", "BorderColor": "#000000","Alpha": "100%", "IsBold": "false", "IsShowBorder": "false", "BorderWidth": "1","IsShowBG": "true"}, "IsUseGlabolDatasource": true, "IsShowEffectiveDigit": false,"IsUseGlobalDecimalDigits": false, "HiHiLimit": "","LoLoStyle": "{\\"IsShowBG\\":true,\\"TextAlign\\":\\"'+TextAlign+'\\",\\"FillColor\\":65535,\\"BorderColor\\":0,\\"BorderWidth\\":1,\\"IsBold\\":false,\\"IsShowBorder\\":false,\\"FontSize\\":18,\\"FontFamily\\":\\"微软雅黑\\",\\"FontColor\\":0,\\"Alpha\\":1}","Expression": "' + Expression + '", "IsFilterExceptionValue": false, "IsAchieveLoLoLimit": true,"LoLimit": "'+LoLimit+'", "DecimalDigits": "'+DecimalDigits+'", "TagUnit": "'+TagUnit+'","TooltipFormat": "名称值时间质量码描述上上限上限下限下下限"}'
+
             Element(Elements, edict)
 
     tree.write(title + ".xml", encoding="utf-8")
